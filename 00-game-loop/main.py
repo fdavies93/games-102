@@ -1,6 +1,6 @@
 import keyboard
 from os import system
-from time import sleep
+import time
 
 shutdown = False
 player_x : int = 1
@@ -10,6 +10,8 @@ floor_char = '.'
 wall_char = '█'
 game_w = 10
 game_h = 10
+last_move = 0
+debounce = 0.2
 
 grid = []
 
@@ -37,10 +39,17 @@ def render():
 def move_to(x, y):
     if (grid[y][x] != wall_char):
         # allow move
+        global last_move
+        global debounce
         global player_x 
-        player_x = x
         global player_y
+
+        if last_move + debounce > time.time(): 
+            return
+
+        player_x = x
         player_y = y
+        last_move = time.time()
 
 key_map = {
     'a': lambda : move_to(player_x - 1, player_y),
@@ -50,17 +59,22 @@ key_map = {
 }
 
 def update():
+    do_render = False
     # you can use keyboard.is_pressed to update player_x and player_y
     for k in key_map:
         if keyboard.is_pressed(k):
             key_map[k]()
+            do_render = True
+    return do_render
+
 
 def main():
     start()
+    render()
     while True:
-        update()
-        render()
-        sleep(0.1)
+        if update():
+            render()
+        time.sleep(0.01)
 
 if __name__ == "__main__":
     main()
