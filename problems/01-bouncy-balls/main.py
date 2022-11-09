@@ -11,6 +11,12 @@ ball_rect = ball.get_rect()
 
 seconds_per_frame = 1 / 32
 
+frames = 0
+prev_render = 0
+prev_frames = 0
+
+font = pygame.font.Font(None, 24)
+
 def process_input():
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sys.exit()
@@ -28,7 +34,18 @@ def update(timestep = 1.0):
 def render(frame_lag = 0):
     global ball_rect
     global ball
+
+    global prev_render
+    global prev_frames
+    global frames
+    global font
+
     screen.fill(black)
+
+    if time.time() > prev_render + 0.25:
+        prev_frames = (frames * 4)
+        frames = 0
+        prev_render = time.time()
 
     render_position = ( 
         ball_rect[0] + (speed[0] * frame_lag),
@@ -36,7 +53,12 @@ def render(frame_lag = 0):
     )
 
     screen.blit(ball, render_position)
-    pygame.display.flip()
+
+    font_surface = font.render(f"FPS: {str(prev_frames)}", True, (255,255,255))
+    screen.blit(font_surface, ( width - (width / 5), 20 ))
+
+    pygame.display.flip()    
+    frames += 1
 
 
 def loop_naive():
