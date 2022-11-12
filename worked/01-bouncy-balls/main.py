@@ -2,7 +2,7 @@ import pygame, sys, time
 pygame.init()
 
 size = width, height = (640, 480)
-speed = [10, 10]
+speed = [5, 5]
 black = (0, 0, 0)
 screen = pygame.display.set_mode(size)
 
