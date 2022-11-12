@@ -1,13 +1,15 @@
-import pygame, time, sys
+import pygame, time, sys, math
 pygame.init()
 
 black = (0, 0, 0)
+red_circle = pygame.image.load("assets/red-circle-small.png")
 
 class GameObject():
-    def __init__(self):
-        self.position = (0,0)
-        self.speed = (0,0)
-        self.sprite = None
+    def __init__(self, position = (0,0), bounds=(0,0), speed = (0,0), sprite = None):
+        self.position = position
+        self.bounds = bounds
+        self.speed = speed
+        self.sprite = sprite
 
 # never use this - it's a base class
 class EventHandler():
@@ -17,13 +19,13 @@ class EventHandler():
     def on_event(ev):
         pass
 
-class CameraEventHandler(EventHandler):
-    def __init__(self, obj : GameObject):
+class MoveEventHandler(EventHandler):
+    def __init__(self, obj : GameObject, speed = 5):
         self.speed_map = {
-            'w': (0, -5), 
-            'a': (-5, 0),
-            's': (0, 5),
-            'd': (5, 0)
+            'w': (0, -speed), 
+            'a': (-speed, 0),
+            's': (0, speed),
+            'd': (speed, 0)
         }
         super().__init__(obj)
     
@@ -43,7 +45,7 @@ class CameraEventHandler(EventHandler):
         elif (ev.type == pygame.KEYUP):
             self.change_obj_speed( self.speed_map[key_name], True)
 
-        print(f"Position: {self.object.position}, Speed: {self.object.speed}")
+        # print(f"Position: {self.object.position}, Speed: {self.object.speed}")
 
 
 class FpsCounter():
@@ -68,18 +70,29 @@ class Game():
     def __init__(self):
         self.size = self.width, self.height = (640, 480)
         self.screen = pygame.display.set_mode(self.size)
+        self.bounds = (-10000, 10000) # minimum and maximum values of object positions
         self.fps_counter = FpsCounter()
-        self.camera = GameObject()
-        self.physics_objects = [self.camera]
-        self.camera_listener = CameraEventHandler(self.camera)
+        self.camera = GameObject(bounds=(640,480))
+        self.sprites = []
         self.fps = 1 / 30
-        self.key_listeners = [self.camera_listener]
 
-    def on_key_press(self):
-        pass
+    def setup(self):
+        self.ball = GameObject(position=(320,240), bounds=(111,111), sprite=pygame.image.load("assets/ball.gif"))
+        self.physics_objects = [self.camera, self.ball]
+        self.camera_listener = MoveEventHandler(self.camera)
 
-    def on_key_release(self):
-        pass
+        width = 50
+        height = 50
+        spacing = 100
+
+        for i in range(width*height):
+            obj_pos = ( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
+            cur_obj = GameObject(obj_pos, sprite=red_circle)
+            self.sprites.append(cur_obj)
+
+        self.sprites.append(self.ball)
+
+        self.key_listeners = [self.camera_listener, MoveEventHandler(self.ball)]
 
     def process_input(self):
         for event in pygame.event.get():
@@ -90,18 +103,35 @@ class Game():
 
     def update(self):
         for obj in self.physics_objects:
-            obj.position = (obj.position[0] + obj.speed[0], obj.position[1] + obj.speed[1])
+            new_position = [obj.position[0] + obj.speed[0], obj.position[1] + obj.speed[1]]
+            if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
+                new_position[0] -= obj.speed[0]
+            if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
+                new_position[1] -= obj.speed[1]
+            obj.position = (new_position[0], new_position[1])
 
     def render(self, correction : float):
         self.screen.fill(black)
 
         width = self.width
 
+        for obj in self.sprites:
+
+            obj_screen_position = (obj.position[0] - self.camera.position[0], obj.position[1] - self.camera.position[1])
+
+            if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.width:
+                # object is off screen, don't bother rendering    
+                continue
+            
+            self.screen.blit(obj.sprite, obj_screen_position)
+
         self.fps_counter.render(self.screen, ( width - (width / 5), 20 ))
 
         pygame.display.flip()
 
     def main(self):
+        self.setup()
+
         prev = time.time()
         lag = 0.0
 
