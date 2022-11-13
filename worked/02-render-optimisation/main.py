@@ -81,10 +81,10 @@ class TrackEventHandler(EventHandler):
         high = Game.instance.bounds[1]
 
         if (new_position[0] < Game.instance.bounds[0] or new_position[0] + self.object.bounds[0] > Game.instance.bounds[1]):
-                new_position[0] = clamp_between(new_position[0], low, high)
+                new_position[0] = clamp_between(new_position[0], low, high - self.object.bounds[0])
                 new_speed[0] = 0
         if (new_position[1] < Game.instance.bounds[1] or new_position[1] + self.object.bounds[1] > Game.instance.bounds[1]):
-                new_position[1] = clamp_between(new_position[1], low, high)
+                new_position[1] = clamp_between(new_position[1], low, high - self.object.bounds[1])
                 new_speed[1] = 0
         
         self.object.speed = (new_speed[0], new_speed[1])
@@ -116,7 +116,7 @@ class Game():
     def __init__(self):
         self.size = self.width, self.height = (640, 480)
         self.screen = pygame.display.set_mode(self.size)
-        self.bounds = (-400, 1000) # minimum and maximum values of object positions
+        self.bounds = (-100, 1000) # minimum and maximum values of object positions
         self.fps_counter = FpsCounter()
         self.camera = GameObject(bounds=(640,480))
         self.sprites = []
@@ -135,7 +135,7 @@ class Game():
 
         for i in range(width*height):
             obj_pos = ( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-            cur_obj = GameObject(obj_pos, sprite=red_circle)
+            cur_obj = GameObject(obj_pos, bounds=(16,16), sprite=red_circle)
             self.sprites.append(cur_obj)
 
         self.sprites.append(self.ball)
