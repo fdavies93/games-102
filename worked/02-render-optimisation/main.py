@@ -1,8 +1,20 @@
 import pygame, time, sys, math
+from enum import IntEnum
 pygame.init()
 
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/red-circle-small.png")
+
+def clamp_between(to_clamp, lower, upper):
+    output = to_clamp
+    if output < lower:
+        output = lower
+    elif output > upper:
+        output = upper
+    return output
+
+class CustomEvent(IntEnum):
+    AFTER_UPDATE = pygame.event.custom_type()
 
 class GameObject():
     def __init__(self, position = (0,0), bounds=(0,0), speed = (0,0), sprite = None):
@@ -10,6 +22,7 @@ class GameObject():
         self.bounds = bounds
         self.speed = speed
         self.sprite = sprite
+        self.last_updated = 0
 
 # never use this - it's a base class
 class EventHandler():
@@ -48,6 +61,36 @@ class MoveEventHandler(EventHandler):
         # print(f"Position: {self.object.position}, Speed: {self.object.speed}")
 
 
+class TrackEventHandler(EventHandler):
+    def __init__(self, obj : GameObject, to_follow = None):
+        self.to_follow = to_follow
+        super().__init__(obj)
+    
+    def on_event(self, ev : pygame.event.Event):
+
+        if self.to_follow == None:
+            return
+        if ev.type != CustomEvent.AFTER_UPDATE:
+            print("returning")
+            return
+
+        new_position = [self.to_follow.position[0] - (self.object.bounds[0] / 2), self.to_follow.position[1] - (self.object.bounds[1] / 2)]
+        new_speed = [self.to_follow.speed[0], self.to_follow.speed[1]]
+
+        low = Game.instance.bounds[0]
+        high = Game.instance.bounds[1]
+
+        if (new_position[0] < Game.instance.bounds[0] or new_position[0] + self.object.bounds[0] > Game.instance.bounds[1]):
+                new_position[0] = clamp_between(new_position[0], low, high)
+                new_speed[0] = 0
+        if (new_position[1] < Game.instance.bounds[1] or new_position[1] + self.object.bounds[1] > Game.instance.bounds[1]):
+                new_position[1] = clamp_between(new_position[1], low, high)
+                new_speed[1] = 0
+        
+        self.object.speed = (new_speed[0], new_speed[1])
+        self.object.position = (new_position[0], new_position[1])
+
+
 class FpsCounter():
     
     def __init__(self):
@@ -67,22 +110,27 @@ class FpsCounter():
         surface.blit(font_surface, position)
 
 class Game():
+
+    instance = None
+
     def __init__(self):
         self.size = self.width, self.height = (640, 480)
         self.screen = pygame.display.set_mode(self.size)
-        self.bounds = (-10000, 10000) # minimum and maximum values of object positions
+        self.bounds = (-400, 1000) # minimum and maximum values of object positions
         self.fps_counter = FpsCounter()
         self.camera = GameObject(bounds=(640,480))
         self.sprites = []
         self.fps = 1 / 30
+        self.update_listeners : list[EventHandler] = []
+        Game.instance = self
 
     def setup(self):
         self.ball = GameObject(position=(320,240), bounds=(111,111), sprite=pygame.image.load("assets/ball.gif"))
-        self.physics_objects = [self.camera, self.ball]
+        self.physics_objects = [self.ball, self.camera]
         self.camera_listener = MoveEventHandler(self.camera)
 
-        width = 50
-        height = 50
+        width = 10
+        height = 10
         spacing = 100
 
         for i in range(width*height):
@@ -92,7 +140,8 @@ class Game():
 
         self.sprites.append(self.ball)
 
-        self.key_listeners = [self.camera_listener, MoveEventHandler(self.ball)]
+        self.key_listeners = [MoveEventHandler(self.ball)]
+        self.update_listeners = [TrackEventHandler(self.camera, self.ball)]
 
     def process_input(self):
         for event in pygame.event.get():
@@ -101,7 +150,7 @@ class Game():
                 for listener in self.key_listeners:
                     listener.on_event(event)
 
-    def update(self):
+    def update(self, timestamp):
         for obj in self.physics_objects:
             new_position = [obj.position[0] + obj.speed[0], obj.position[1] + obj.speed[1]]
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
@@ -109,6 +158,10 @@ class Game():
             if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
                 new_position[1] -= obj.speed[1]
             obj.position = (new_position[0], new_position[1])
+            obj.last_updated = timestamp
+
+        for listener in self.update_listeners:
+            listener.on_event(pygame.event.Event(CustomEvent.AFTER_UPDATE,{"timestamp": timestamp}))
 
     def render(self, correction : float):
         self.screen.fill(black)
@@ -144,7 +197,7 @@ class Game():
             self.process_input()
 
             while(lag >= self.fps):
-                self.update()
+                self.update(current)
                 lag -= self.fps
 
             self.render(lag / self.fps)
