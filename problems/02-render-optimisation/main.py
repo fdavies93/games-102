@@ -1,18 +1,30 @@
 import pygame, time, sys, math
+from enum import IntEnum
 pygame.init()
 
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/red-circle-small.png")
 
-# a basic GameObject storing some simple information about an object
+def clamp_between(to_clamp, lower, upper):
+    output = to_clamp
+    if output < lower:
+        output = lower
+    elif output > upper:
+        output = upper
+    return output
+
+class CustomEvent(IntEnum):
+    AFTER_UPDATE = pygame.event.custom_type()
+
 class GameObject():
     def __init__(self, position = (0,0), bounds=(0,0), speed = (0,0), sprite = None):
         self.position = position
         self.bounds = bounds
         self.speed = speed
         self.sprite = sprite
+        self.last_updated = 0
 
-# never use this directly - it's a base class
+# never use this - it's a base class
 class EventHandler():
     def __init__(self, obj : GameObject):
         self.object = obj
@@ -30,24 +42,55 @@ class MoveEventHandler(EventHandler):
         }
         super().__init__(obj)
     
-    # this function helps with setting the movement speed of an object
-    def change_obj_speed(self, speed, invert ):
+    def change_obj_speed(self, speed, invert):
         cur_speed = self.object.speed
         speed_change = speed
         if invert:
             speed_change = (-speed[0],-speed[1])
         self.object.speed = ( cur_speed[0] + speed_change[0], cur_speed[1] + speed_change[1] )
 
-
     def on_event(self, ev : pygame.event.Event):
         key_name = pygame.key.name(ev.key)
-        # first, exit out of the function if no valid keys are pressed
-        # second, check if the key was pressed or released:
-        # if pressed, we can alter the speed based on which key was pressed
-        # if released, we do the same but negate the values in speed_map 
+        if key_name not in self.speed_map: 
+            return
+        if (ev.type == pygame.KEYDOWN):
+            self.change_obj_speed( self.speed_map[key_name], False )
+        elif (ev.type == pygame.KEYUP):
+            self.change_obj_speed( self.speed_map[key_name], True)
+
+        # print(f"Position: {self.object.position}, Speed: {self.object.speed}")
 
 
-# helper class for rendering the FPS counter UI element
+class TrackEventHandler(EventHandler):
+    def __init__(self, obj : GameObject, to_follow = None):
+        self.to_follow = to_follow
+        super().__init__(obj)
+    
+    def on_event(self, ev : pygame.event.Event):
+
+        if self.to_follow == None:
+            return
+        if ev.type != CustomEvent.AFTER_UPDATE:
+            print("returning")
+            return
+
+        new_position = [self.to_follow.position[0] - (self.object.bounds[0] / 2), self.to_follow.position[1] - (self.object.bounds[1] / 2)]
+        new_speed = [self.to_follow.speed[0], self.to_follow.speed[1]]
+
+        low = Game.instance.bounds[0]
+        high = Game.instance.bounds[1]
+
+        if (new_position[0] < Game.instance.bounds[0] or new_position[0] + self.object.bounds[0] > Game.instance.bounds[1]):
+                new_position[0] = clamp_between(new_position[0], low, high - self.object.bounds[0])
+                new_speed[0] = 0
+        if (new_position[1] < Game.instance.bounds[1] or new_position[1] + self.object.bounds[1] > Game.instance.bounds[1]):
+                new_position[1] = clamp_between(new_position[1], low, high - self.object.bounds[1])
+                new_speed[1] = 0
+        
+        self.object.speed = (new_speed[0], new_speed[1])
+        self.object.position = (new_position[0], new_position[1])
+
+
 class FpsCounter():
     
     def __init__(self):
@@ -67,46 +110,47 @@ class FpsCounter():
         surface.blit(font_surface, position)
 
 class Game():
+
+    instance = None
+
     def __init__(self):
         self.size = self.width, self.height = (640, 480)
         self.screen = pygame.display.set_mode(self.size)
-        self.bounds = (-10000, 10000) # minimum and maximum values of object positions
+        self.bounds = (-100, 1000) # minimum and maximum values of object positions
         self.fps_counter = FpsCounter()
         self.camera = GameObject(bounds=(640,480))
         self.sprites = []
         self.fps = 1 / 30
+        self.update_listeners : list[EventHandler] = []
+        Game.instance = self
 
     def setup(self):
         self.ball = GameObject(position=(320,240), bounds=(111,111), sprite=pygame.image.load("assets/ball.gif"))
-        # add the camera and the ball so that they're affected by update()
-        self.physics_objects = []
+        self.physics_objects = [self.ball, self.camera]
+        self.camera_listener = MoveEventHandler(self.camera)
 
-        width = 50
-        height = 50
+        width = 10
+        height = 10
         spacing = 100
 
-        # DON'T EDIT: NEEDED LATER
         for i in range(width*height):
             obj_pos = ( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-            cur_obj = GameObject(obj_pos, sprite=red_circle)
+            cur_obj = GameObject(obj_pos, bounds=(16,16), sprite=red_circle)
             self.sprites.append(cur_obj)
 
         self.sprites.append(self.ball)
-        #--------------------------
 
-        # add some MoveEventListeners for the ball and the camera to make them respond to input
-        self.key_listeners = []
+        self.key_listeners = [MoveEventHandler(self.ball)]
+        self.update_listeners = [TrackEventHandler(self.camera, self.ball)]
 
     def process_input(self):
         for event in pygame.event.get():
-            # this checks for window closed
             if event.type == pygame.QUIT: sys.exit()
-            # this checks if a key was pressed or released
             if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
                 for listener in self.key_listeners:
                     listener.on_event(event)
 
-    def update(self):
+    def update(self, timestamp):
         for obj in self.physics_objects:
             new_position = [obj.position[0] + obj.speed[0], obj.position[1] + obj.speed[1]]
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
@@ -114,22 +158,24 @@ class Game():
             if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
                 new_position[1] -= obj.speed[1]
             obj.position = (new_position[0], new_position[1])
+            obj.last_updated = timestamp
+
+        for listener in self.update_listeners:
+            listener.on_event(pygame.event.Event(CustomEvent.AFTER_UPDATE,{"timestamp": timestamp}))
 
     def render(self, correction : float):
         self.screen.fill(black)
 
         width = self.width
 
-        # for each object in the game sprites list (i.e. objects to render)
-        # stage 1: render them at their position *relative to the camera*
-        # stage 2: use the camera and sprite position to choose which sprites we actually want to render
-        # stage 3 (extension): modify the setup function to allocate objects a position in a quadmap, use that to cull more efficiently
-        # stage 3a (super extension): modify the update function to only simulate objects in tiles surrounding the quadmap and to move them between cells
-
         for obj in self.sprites:
+            # 1 - change the rendering of sprites so that they move relative to the camera
+            # 2 - only render the things which are actually on screen (view culling)
+            # 3 (extension) - get the camera to zoom
+            # 4 (extension) - make render correction work again as per bouncy ball demo
+            
             self.screen.blit(obj.sprite, obj.position)
 
-        # where to render the FPS counter on the screen
         self.fps_counter.render(self.screen, ( width - (width / 5), 20 ))
 
         pygame.display.flip()
@@ -149,7 +195,7 @@ class Game():
             self.process_input()
 
             while(lag >= self.fps):
-                self.update()
+                self.update(current)
                 lag -= self.fps
 
             self.render(lag / self.fps)
