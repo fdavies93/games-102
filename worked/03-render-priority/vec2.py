@@ -28,3 +28,6 @@ class Vec2():
             raise TypeError()
 
         return Vec2(self.x * other, self.y * other)
+
+    def as_tuple(self):
+        return (self.x, self.y)
