@@ -1,18 +1,12 @@
 import pygame, time, sys, math
 from enum import IntEnum
 from vec2 import Vec2
+from utils import clamp_between
+from random import randint
 pygame.init()
 
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/red-circle-small.png")
-
-def clamp_between(to_clamp, lower, upper):
-    output = to_clamp
-    if output < lower:
-        output = lower
-    elif output > upper:
-        output = upper
-    return output
 
 class CustomEvent(IntEnum):
     AFTER_UPDATE = pygame.event.custom_type()
@@ -138,13 +132,28 @@ class Game():
         upper = len(self.layers)
         lower = 0
         cur_priority = self.layers[pivot].priority
-        while cur_priority != new_layer.priority and upper != lower:
+        while cur_priority != new_layer.priority and upper != lower + 1 and pivot < upper and pivot >= lower:
+            cur_priority = self.layers[pivot].priority
             if new_layer.priority < self.layers[pivot].priority:
                 upper = pivot
             if new_layer.priority > self.layers[pivot].priority:
                 lower = pivot
-
             pivot = math.floor((upper - lower) / 2) + lower
+            
+        cur_priority = self.layers[pivot].priority
+
+        # if pivot != len(self.layers):
+        #     cur_priority = self.layers[pivot].priority
+
+        if cur_priority == new_layer.priority:
+            return
+
+        if pivot == len(self.layers):
+            self.layers.append(new_layer)
+        else:
+            self.layers.insert(pivot + 1, new_layer)
+        print([l.priority for l in self.layers])
+        
 
     def setup(self):
         self.ball = GameObject(position=Vec2(320,240), bounds=Vec2(111,111), sprite=pygame.image.load("assets/ball.gif"))
@@ -153,7 +162,8 @@ class Game():
 
         self.layers = [Layer(0, 1.0), Layer(1, 1.0)]
         
-
+        for i in range(10):
+            self.add_layer(Layer(randint(0, 5)))
 
         width = 10
         height = 10
@@ -181,7 +191,6 @@ class Game():
             new_position = obj.position + obj.speed
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
                 new_position = new_position - Vec2(obj.speed.x, 0)
-                # new_position[0] -= Vec2(obj.speed[0], 0)
             if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
                 new_position = new_position - Vec2(0, obj.speed.y)
             obj.position = new_position
