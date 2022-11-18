@@ -1,5 +1,6 @@
 import pygame, time, sys, math
 from enum import IntEnum
+from vec2 import Vec2
 pygame.init()
 
 black = (0, 0, 0)
@@ -17,7 +18,7 @@ class CustomEvent(IntEnum):
     AFTER_UPDATE = pygame.event.custom_type()
 
 class GameObject():
-    def __init__(self, position = (0,0), bounds=(0,0), speed = (0,0), sprite = None, layer = 0):
+    def __init__(self, position = Vec2(0,0), bounds=Vec2(0,0), speed = Vec2(0,0), sprite = None, layer = 0):
         self.position = position
         self.bounds = bounds
         self.speed = speed
@@ -26,7 +27,7 @@ class GameObject():
         self.last_updated = 0
 
 class Layer():
-    def __init__(self, priority = 0, parallax = 1.0):
+    def __init__(self, priority = 0, parallax = Vec2(1.0,1.0)):
         self.priority = priority
         self.parallax = parallax
 
@@ -41,10 +42,10 @@ class EventHandler():
 class MoveEventHandler(EventHandler):
     def __init__(self, obj : GameObject, speed = 5):
         self.speed_map = {
-            'w': (0, -speed), 
-            'a': (-speed, 0),
-            's': (0, speed),
-            'd': (speed, 0)
+            'w': Vec2(0, -speed), 
+            'a': Vec2(-speed, 0),
+            's': Vec2(0, speed),
+            'd': Vec2(speed, 0)
         }
         super().__init__(obj)
     
@@ -52,8 +53,8 @@ class MoveEventHandler(EventHandler):
         cur_speed = self.object.speed
         speed_change = speed
         if invert:
-            speed_change = (-speed[0],-speed[1])
-        self.object.speed = ( cur_speed[0] + speed_change[0], cur_speed[1] + speed_change[1] )
+            speed_change = speed.negate()
+        self.object.speed = cur_speed + speed_change
 
     def on_event(self, ev : pygame.event.Event):
         key_name = pygame.key.name(ev.key)
@@ -124,7 +125,7 @@ class Game():
         self.screen = pygame.display.set_mode(self.size)
         self.bounds = (-100, 1000) # minimum and maximum values of object positions
         self.fps_counter = FpsCounter()
-        self.camera = GameObject(bounds=(640,480))
+        self.camera = GameObject(bounds=Vec2(640,480))
         self.sprites = []
         self.layers = []
         self.fps = 1 / 30
@@ -146,11 +147,11 @@ class Game():
             pivot = math.floor((upper - lower) / 2) + lower
 
     def setup(self):
-        self.ball = GameObject(position=(320,240), bounds=(111,111), sprite=pygame.image.load("assets/ball.gif"))
+        self.ball = GameObject(position=Vec2(320,240), bounds=Vec2(111,111), sprite=pygame.image.load("assets/ball.gif"))
         self.physics_objects = [self.ball, self.camera]
         self.camera_listener = MoveEventHandler(self.camera)
 
-        self.layers = [Layer(0, 1.0), layer(1, 1.0)]
+        self.layers = [Layer(0, 1.0), Layer(1, 1.0)]
         
 
 
@@ -159,8 +160,8 @@ class Game():
         spacing = 100
 
         for i in range(width*height):
-            obj_pos = ( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-            cur_obj = GameObject(obj_pos, bounds=(16,16), sprite=red_circle, layer=0)
+            obj_pos = Vec2( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
+            cur_obj = GameObject(obj_pos, bounds=Vec2(16,16), sprite=red_circle, layer=0)
             self.sprites.append(cur_obj)
 
         self.sprites.append(self.ball)
@@ -177,12 +178,13 @@ class Game():
 
     def update(self, timestamp):
         for obj in self.physics_objects:
-            new_position = [obj.position[0] + obj.speed[0], obj.position[1] + obj.speed[1]]
+            new_position = obj.position + obj.speed
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
-                new_position[0] -= obj.speed[0]
+                new_position = new_position - Vec2(obj.speed.x, 0)
+                # new_position[0] -= Vec2(obj.speed[0], 0)
             if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
-                new_position[1] -= obj.speed[1]
-            obj.position = (new_position[0], new_position[1])
+                new_position = new_position - Vec2(0, obj.speed.y)
+            obj.position = new_position
             obj.last_updated = timestamp
 
         for listener in self.update_listeners:

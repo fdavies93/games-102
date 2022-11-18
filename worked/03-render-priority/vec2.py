@@ -29,5 +29,21 @@ class Vec2():
 
         return Vec2(self.x * other, self.y * other)
 
+    def __getitem__(self,key):
+        if not isinstance(key, int):
+            raise TypeError()
+        if not (key == 0 or key == 1):
+            raise ValueError()
+        if key == 0:
+            return self.x
+        elif key == 1:
+            return self.y
+
+    def negate(self):
+        return Vec2(-self.x, -self.y)
+
     def as_tuple(self):
         return (self.x, self.y)
+
+    def as_list(self):
+        return [self.x, self.y]
