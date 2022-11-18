@@ -8,22 +8,27 @@ pygame.init()
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/red-circle-small.png")
 
+
 class CustomEvent(IntEnum):
     AFTER_UPDATE = pygame.event.custom_type()
 
 class GameObject():
-    def __init__(self, position = Vec2(0,0), bounds=Vec2(0,0), speed = Vec2(0,0), sprite = None, layer = 0):
+    def __init__(self, position = Vec2(0,0), bounds=Vec2(0,0), speed = Vec2(0,0), sprite = None):
+        self.id = Game.next_id()
         self.position = position
         self.bounds = bounds
         self.speed = speed
         self.sprite = sprite
-        self.layer = layer
         self.last_updated = 0
 
 class Layer():
     def __init__(self, priority = 0, parallax = Vec2(1.0,1.0)):
         self.priority = priority
         self.parallax = parallax
+        self.objects = [] # store by index
+    
+    def add_object(self, obj):
+        self.objects.append(obj.id)
 
 # never use this - it's a base class
 class EventHandler():
@@ -115,16 +120,21 @@ class Game():
     instance = None
 
     def __init__(self):
-        self.size = self.width, self.height = (640, 480)
+        self.size = self.width, self.height = (960, 640)
         self.screen = pygame.display.set_mode(self.size)
-        self.bounds = (-100, 1000) # minimum and maximum values of object positions
-        self.fps_counter = FpsCounter()
-        self.camera = GameObject(bounds=Vec2(640,480))
+        self.bounds = (0, 1320) # minimum and maximum values of object positions
         self.sprites = []
         self.layers = []
         self.fps = 1 / 30
         self.update_listeners : list[EventHandler] = []
+        self._id = 0
+        self.objects = {}
         Game.instance = self
+
+    def next_id():
+        cur = Game.instance._id
+        Game.instance._id += 1
+        return cur
 
     def add_layer(self, new_layer):
         # do a binary search based insert at correct position
@@ -156,25 +166,50 @@ class Game():
         
 
     def setup(self):
+        tree_sprite = pygame.image.load("assets/tree.png").convert_alpha()
+        ground_tile = pygame.image.load("assets/ground-tile.png").convert()
+
+        self.fps_counter = FpsCounter()
+        self.camera = GameObject(bounds=Vec2(960,640))
         self.ball = GameObject(position=Vec2(320,240), bounds=Vec2(111,111), sprite=pygame.image.load("assets/ball.gif"))
+        self.background = GameObject(sprite=pygame.image.load("assets/night-sky.png").convert_alpha(), bounds=Vec2(960,640))
+        self.mountains = GameObject(sprite=pygame.image.load("assets/mountains.png").convert_alpha(), position=Vec2(0,560), bounds=Vec2(1320,640))
         self.physics_objects = [self.ball, self.camera]
         self.camera_listener = MoveEventHandler(self.camera)
 
-        self.layers = [Layer(0, 1.0), Layer(1, 1.0)]
-        
+        self.objects[self.camera.id] = self.camera
+        self.objects[self.ball.id] = self.ball
+        self.objects[self.background.id] = self.background
+        self.objects[self.mountains.id] = self.mountains
+
+        self.layers = [Layer(0, parallax=Vec2(0,0)), Layer(1, parallax=Vec2(0.5, 0.5)), Layer(3,parallax=Vec2(0.75,0.75)), Layer(2)]
+        self.layers[0].add_object(self.background)
+        self.layers[1].add_object(self.mountains)
+        self.layers[3].add_object(self.ball)
+
+        tree_spacing = 500
+        for i in range(5):
+            new_tree = GameObject(position=Vec2(i * tree_spacing, 640), bounds=Vec2(640,640), sprite=tree_sprite)
+            self.objects[new_tree.id] = new_tree
+            self.layers[2].add_object(new_tree)
+
+        spacing = 159
         for i in range(10):
-            self.add_layer(Layer(randint(0, 5)))
+            new_ground = GameObject(position=Vec2(i * spacing, 1200), bounds=Vec2(159,159), sprite=ground_tile)
+            self.objects[new_ground.id] = new_ground
+            self.layers[3].add_object(new_ground)
 
-        width = 10
-        height = 10
-        spacing = 100
+        # width = 10
+        # height = 10
+        # spacing = 200
 
-        for i in range(width*height):
-            obj_pos = Vec2( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-            cur_obj = GameObject(obj_pos, bounds=Vec2(16,16), sprite=red_circle, layer=0)
-            self.sprites.append(cur_obj)
+        # for i in range(width*height):
+        #     obj_pos = Vec2( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
+        #     cur_obj = GameObject(obj_pos, bounds=Vec2(16,16), sprite=red_circle)
+        #     self.layers[1].add_object(cur_obj)
+        #     self.objects[cur_obj.id] = cur_obj
 
-        self.sprites.append(self.ball)
+        # self.sprites.append(self.ball)
 
         self.key_listeners = [MoveEventHandler(self.ball)]
         self.update_listeners = [TrackEventHandler(self.camera, self.ball)]
@@ -204,15 +239,16 @@ class Game():
 
         width = self.width
 
-        for obj in self.sprites:
+        for layer in self.layers:
+            for obj_id in layer.objects:
+                obj = self.objects[obj_id]
+                obj_screen_position = ((obj.position[0] - self.camera.position[0]) * layer.parallax.x, (obj.position[1] - self.camera.position[1]) * layer.parallax.y)
 
-            obj_screen_position = (obj.position[0] - self.camera.position[0], obj.position[1] - self.camera.position[1])
+                if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.height:
+                    # object is off screen, don't bother rendering    
+                    continue
 
-            if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.width:
-                # object is off screen, don't bother rendering    
-                continue
-            
-            self.screen.blit(obj.sprite, obj_screen_position)
+                self.screen.blit(obj.sprite, obj_screen_position)
 
         self.fps_counter.render(self.screen, ( width - (width / 5), 20 ))
 
