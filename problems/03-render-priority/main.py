@@ -138,6 +138,7 @@ class Game():
 
     def add_layer(self, new_layer):
         # do a binary search based insert at correct position
+        # this algorithm is not the easiest to livecode
         pivot = math.floor(len(self.layers) / 2)
         upper = len(self.layers)
         lower = 0
@@ -152,9 +153,6 @@ class Game():
             
         cur_priority = self.layers[pivot].priority
 
-        # if pivot != len(self.layers):
-        #     cur_priority = self.layers[pivot].priority
-
         if cur_priority == new_layer.priority:
             return
 
@@ -162,7 +160,6 @@ class Game():
             self.layers.append(new_layer)
         else:
             self.layers.insert(pivot + 1, new_layer)
-        print([l.priority for l in self.layers])
         
 
     def setup(self):
@@ -177,39 +174,24 @@ class Game():
         self.physics_objects = [self.ball, self.camera]
         self.camera_listener = MoveEventHandler(self.camera)
 
+        # add ball, camera, background and mountains to object dict by ID
         self.objects[self.camera.id] = self.camera
-        self.objects[self.ball.id] = self.ball
-        self.objects[self.background.id] = self.background
-        self.objects[self.mountains.id] = self.mountains
 
-        self.layers = [Layer(0, parallax=Vec2(0,0)), Layer(1, parallax=Vec2(0.5, 0.5)), Layer(3,parallax=Vec2(0.75,0.75)), Layer(2)]
+        # populate layers array
+        self.layers = [Layer(0, parallax=Vec2(0.0,0.0))]
+
+        # add objects to layers
         self.layers[0].add_object(self.background)
-        self.layers[1].add_object(self.mountains)
-        self.layers[3].add_object(self.ball)
 
         tree_spacing = 500
         for i in range(5):
-            new_tree = GameObject(position=Vec2(i * tree_spacing, 640), bounds=Vec2(640,640), sprite=tree_sprite)
-            self.objects[new_tree.id] = new_tree
-            self.layers[2].add_object(new_tree)
+            pass
+            # create and add 5 trees at the bottom of the level behind the player somewhere
 
         spacing = 159
         for i in range(10):
-            new_ground = GameObject(position=Vec2(i * spacing, 1200), bounds=Vec2(159,159), sprite=ground_tile)
-            self.objects[new_ground.id] = new_ground
-            self.layers[3].add_object(new_ground)
-
-        # width = 10
-        # height = 10
-        # spacing = 200
-
-        # for i in range(width*height):
-        #     obj_pos = Vec2( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-        #     cur_obj = GameObject(obj_pos, bounds=Vec2(16,16), sprite=red_circle)
-        #     self.layers[1].add_object(cur_obj)
-        #     self.objects[cur_obj.id] = cur_obj
-
-        # self.sprites.append(self.ball)
+            pass
+            # create and add 10 trees at the bottom of the level on the same layer as the player
 
         self.key_listeners = [MoveEventHandler(self.ball)]
         self.update_listeners = [TrackEventHandler(self.camera, self.ball)]
@@ -242,7 +224,8 @@ class Game():
         for layer in self.layers:
             for obj_id in layer.objects:
                 obj = self.objects[obj_id]
-                obj_screen_position = ((obj.position[0] - self.camera.position[0]) * layer.parallax.x, (obj.position[1] - self.camera.position[1]) * layer.parallax.y)
+                # implement parallaxing in the screen_position variable
+                obj_screen_position = (obj.position[0] - self.camera.position[0], obj.position[1] - self.camera.position[1])
 
                 if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.height:
                     # object is off screen, don't bother rendering    
