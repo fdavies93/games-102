@@ -11,6 +11,7 @@ pygame.init()
 
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/red-circle-small.png")
+ground_tileset = pygame.image.load("assets/grass-tiles.png")
 
 class Game():
 
@@ -27,6 +28,16 @@ class Game():
         self._id = 0
         self.objects = {}
         Game.instance = self
+        self.tileset = ground_tileset.convert()
+        self.tiles = []
+        for x in range(8):
+            # it's 8 x 8 tiles of 32 x 32px
+            # scale to 64 x 64 and load to a 2d array
+            col = []
+            for y in range(8):
+                area = pygame.rect.Rect(x * 32, y * 32, 32, 32)
+                col.append(pygame.transform.scale2x(self.tileset.subsurface(area)))
+            self.tiles.append(col)
 
     def next_id(self):
         cur = self._id
@@ -60,50 +71,24 @@ class Game():
         
 
     def setup(self):
-        tree_sprite = pygame.image.load("assets/tree.png").convert_alpha()
-        ground_tile = pygame.image.load("assets/ground-tile.png").convert()
 
         self.fps_counter = FpsCounter()
         self.camera = GameObject(self, bounds=Vec2(960,640))
         self.ball = GameObject(self, position=Vec2(320,240), bounds=Vec2(111,111), sprite=pygame.image.load("assets/ball.gif").convert_alpha())
-        self.background = GameObject(self, sprite=pygame.image.load("assets/night-sky.png").convert_alpha(), bounds=Vec2(960,640))
-        self.mountains = GameObject(self, sprite=pygame.image.load("assets/mountains.png").convert_alpha(), position=Vec2(0,560), bounds=Vec2(1320,640))
         self.physics_objects = [self.ball, self.camera]
-        # self.camera_listener = MoveEventHandler(self, self.camera)
-
+        
         self.objects[self.camera.id] = self.camera
         self.objects[self.ball.id] = self.ball
-        self.objects[self.background.id] = self.background
-        self.objects[self.mountains.id] = self.mountains
 
-        self.layers = [Layer(0, parallax=Vec2(0,0)), Layer(1, parallax=Vec2(0.5, 0.5)), Layer(3,parallax=Vec2(0.75,0.75)), Layer(2)]
-        self.layers[0].add_object(self.background)
-        self.layers[1].add_object(self.mountains)
-        self.layers[3].add_object(self.ball)
+        self.layers = [Layer(0, parallax=Vec2(1,1)), Layer(1, parallax=Vec2(1, 1))]
+        for x in range(30):
+            for y in range(21):
+                tile_sprite = self.tiles[randint(0, 7)][randint(0, 3)]
+                cur_tile = GameObject(self, position=Vec2(x * 64, y * 64), bounds=Vec2(64, 64), sprite=tile_sprite)
+                self.objects[cur_tile.id] = cur_tile
+                self.layers[0].add_object(cur_tile)
 
-        tree_spacing = 500
-        for i in range(5):
-            new_tree = GameObject(self, position=Vec2(i * tree_spacing, 640), bounds=Vec2(640,640), sprite=tree_sprite)
-            self.objects[new_tree.id] = new_tree
-            self.layers[2].add_object(new_tree)
-
-        spacing = 159
-        for i in range(10):
-            new_ground = GameObject(self, position=Vec2(i * spacing, 1200), bounds=Vec2(159,159), sprite=ground_tile)
-            self.objects[new_ground.id] = new_ground
-            self.layers[3].add_object(new_ground)
-
-        # width = 10
-        # height = 10
-        # spacing = 200
-
-        # for i in range(width*height):
-        #     obj_pos = Vec2( (i * spacing) % (spacing * width), math.floor(i / height) * spacing )
-        #     cur_obj = GameObject(obj_pos, bounds=Vec2(16,16), sprite=red_circle)
-        #     self.layers[1].add_object(cur_obj)
-        #     self.objects[cur_obj.id] = cur_obj
-
-        # self.sprites.append(self.ball)
+        self.layers[1].add_object(self.ball)
 
         self.key_listeners = [MoveEventHandler(self, self.ball)]
         self.update_listeners = [TrackEventHandler(self, self.camera, self.ball)]
