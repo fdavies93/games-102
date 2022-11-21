@@ -3,14 +3,14 @@ from enum import IntEnum
 from vec2 import Vec2
 from utils import clamp_between
 from random import randint
-from handlers import MoveEventHandler, TrackEventHandler, CustomEvent
+from handlers import MoveEventHandler, PlayerBulletSpawner, TrackEventHandler, CustomEvent
 from gameobject import GameObject
 from layer import Layer
 from fpscounter import FpsCounter
 pygame.init()
 
 black = (0, 0, 0)
-red_circle = pygame.image.load("assets/red-circle-small.png")
+red_circle = pygame.image.load("assets/player.png")
 ground_tileset = pygame.image.load("assets/grass-tiles.png")
 
 class Game():
@@ -24,7 +24,9 @@ class Game():
         self.sprites = []
         self.layers = []
         self.fps = 1 / 30
+        self.key_listeners : list[EventHandler] = []
         self.update_listeners : list[EventHandler] = []
+        self.mouse_listeners : list[EventHandler] = []
         self._id = 0
         self.objects = {}
         Game.instance = self
@@ -74,11 +76,11 @@ class Game():
 
         self.fps_counter = FpsCounter()
         self.camera = GameObject(self, bounds=Vec2(960,640))
-        self.ball = GameObject(self, position=Vec2(320,240), bounds=Vec2(111,111), sprite=pygame.image.load("assets/ball.gif").convert_alpha())
-        self.physics_objects = [self.ball, self.camera]
+        self.player = GameObject(self, position=Vec2(320,240), bounds=Vec2(35,47), sprite=red_circle.convert_alpha())
+        self.physics_objects = [self.player, self.camera]
         
         self.objects[self.camera.id] = self.camera
-        self.objects[self.ball.id] = self.ball
+        self.objects[self.player.id] = self.player
 
         self.layers = [Layer(0, parallax=Vec2(1,1)), Layer(1, parallax=Vec2(1, 1))]
         for x in range(30):
@@ -88,10 +90,13 @@ class Game():
                 self.objects[cur_tile.id] = cur_tile
                 self.layers[0].add_object(cur_tile)
 
-        self.layers[1].add_object(self.ball)
+        self.layers[1].add_object(self.player)
 
-        self.key_listeners = [MoveEventHandler(self, self.ball)]
-        self.update_listeners = [TrackEventHandler(self, self.camera, self.ball)]
+        bullet_spawner = PlayerBulletSpawner(self, self.player)
+
+        self.key_listeners = [MoveEventHandler(self, self.player, speed=6)]
+        self.mouse_listeners = [bullet_spawner]
+        self.update_listeners = [TrackEventHandler(self, self.camera, self.player), bullet_spawner]
 
     def process_input(self):
         for event in pygame.event.get():
@@ -99,19 +104,35 @@ class Game():
             if event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
                 for listener in self.key_listeners:
                     listener.on_event(event)
+            if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEBUTTONUP:
+                for listener in self.mouse_listeners:
+                    listener.on_event(event)
+
 
     def update(self, timestamp):
         for obj in self.physics_objects:
             new_position = obj.position + obj.speed
+            out_of_bounds = False
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
-                new_position = new_position - Vec2(obj.speed.x, 0)
+                out_of_bounds = True
             if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
-                new_position = new_position - Vec2(0, obj.speed.y)
+                out_of_bounds = True
+            if out_of_bounds:
+                for listener in self.update_listeners:
+                    listener.on_event(pygame.event.Event(CustomEvent.OUT_OF_BOUNDS, {"object": obj.id}))
             obj.position = new_position
             obj.last_updated = timestamp
 
+        new_listeners = []
         for listener in self.update_listeners:
+            if listener.object.id not in self.objects:
+                continue
+
+            new_listeners.append(listener)
             listener.on_event(pygame.event.Event(CustomEvent.AFTER_UPDATE,{"timestamp": timestamp}))
+
+        self.update_listeners = new_listeners
+
 
     def render(self, correction : float):
         self.screen.fill(black)
@@ -119,9 +140,15 @@ class Game():
         width = self.width
 
         for layer in self.layers:
+            new_objects = []
             for obj_id in layer.objects:
+                if obj_id not in self.objects:
+                    # object no longer exists, don't include in new objects list
+                    continue
+                
+                new_objects.append(obj_id)
                 obj = self.objects[obj_id]
-                obj_screen_position = ((obj.position[0] - self.camera.position[0]) * layer.parallax.x, (obj.position[1] - self.camera.position[1]) * layer.parallax.y)
+                obj_screen_position = ((obj.position[0] + (obj.speed[0] * correction) - self.camera.position[0]) * layer.parallax.x, (obj.position[1] + (obj.speed[1] * correction) - self.camera.position[1]) * layer.parallax.y)
 
                 if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.height:
                     # object is off screen, don't bother rendering    
@@ -129,6 +156,7 @@ class Game():
 
                 self.screen.blit(obj.sprite, obj_screen_position)
 
+            layer.objects = new_objects
         self.fps_counter.render(self.screen, ( width - (width / 5), 20 ))
 
         pygame.display.flip()
