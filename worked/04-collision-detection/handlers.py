@@ -57,7 +57,7 @@ class PlayerBulletSpawner(EventHandler):
         hypothenuse = math.sqrt( (diff[0] ** 2) + (diff[1] ** 2) )
         unit_speed = Vec2(diff[0] / hypothenuse, diff[1] / hypothenuse)
 
-        sprite = GameObject(self.game, spawn_location, Vec2(16,16), speed=(unit_speed * self.speed), sprite=self.bullet_sprite)
+        sprite = GameObject(self.game, "player_bullet", spawn_location, Vec2(16,16), speed=(unit_speed * self.speed), sprite=self.bullet_sprite)
 
         self.game.objects[sprite.id] = sprite
         self.game.layers[1].add_object(sprite)
@@ -72,17 +72,43 @@ class PlayerBulletCollider(EventHandler):
         self.game = game
         super().__init__(obj)
 
+    def remove_self(self):
+        del self.game.objects[self.object.id]
+        # physics object removal should be handled automatically
+        # self.game.physics_objects.remove(self.object)
+        # destroy object
+        # remove self from event handler list
+
+    def handle_collision(self, ev : pygame.event.Event):
+        ignore_list = ["player", "camera"]
+
+        type_1 = self.game.objects[ev.object].type
+        type_2 = self.game.objects[ev.object2].type
+        if type_1 in ignore_list or type_2 in ignore_list:
+            return
+
+        print(f"Collision between {type_1} and {type_2}")
+
+        if ev.object == self.object.id or ev.object2 == self.object.id:
+            self.remove_self()
+
+    def handle_out_of_bounds(self, ev : pygame.event.Event):
+        if ev.object != self.object.id:
+            return
+        
+        self.remove_self()
+
     def on_event(self, ev : pygame.event.Event):
         if ev.type != CustomEvent.OUT_OF_BOUNDS and ev.type != CustomEvent.COLLISION:
             return
         
-        if ev.object != self.object.id:
-            return
+        if ev.type == CustomEvent.COLLISION:
+            self.handle_collision(ev)
+            # bug: triggers where there are multiple bullets on screen
+            # and any other than the last one is 
 
-        del self.game.objects[self.object.id]
-        self.game.physics_objects.remove(self.object)
-        # destroy object
-        # remove self from event handler list
+        if ev.type == CustomEvent.OUT_OF_BOUNDS:
+            self.handle_out_of_bounds(ev)
 
 class MoveEventHandler(EventHandler):
     def __init__(self, game: "Game", obj : GameObject, speed = 5):
@@ -101,7 +127,7 @@ class MoveEventHandler(EventHandler):
             speed_change = speed.negate()
         self.object.speed = cur_speed + speed_change
 
-    def on_event(self, ev : pygame.event.Event):
+    def handle_key_event(self, ev : pygame.event.Event):
         key_name = pygame.key.name(ev.key)
         if key_name not in self.speed_map: 
             return
@@ -109,6 +135,26 @@ class MoveEventHandler(EventHandler):
             self.change_obj_speed( self.speed_map[key_name], False )
         elif (ev.type == pygame.KEYUP):
             self.change_obj_speed( self.speed_map[key_name], True)
+
+    def handle_collision(self, ev : pygame.event.Event):
+
+        if ev.object != self.object.id and ev.object2 != self.object.id:
+            return
+
+        type_1 = self.game.objects[ev.object].type
+        type_2 = self.game.objects[ev.object2].type
+
+        self.object.speed = self.object.speed.negate()
+
+    def on_event(self, ev : pygame.event.Event):
+
+        if (ev.type == pygame.KEYDOWN or ev.type == pygame.KEYUP):
+            self.handle_key_event(ev)
+            return
+
+        if (ev.type == CustomEvent.COLLISION):
+            self.handle_collision(ev)
+            return     
 
         # print(f"Position: {self.object.position}, Speed: {self.object.speed}")
 

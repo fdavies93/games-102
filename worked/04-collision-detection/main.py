@@ -1,7 +1,7 @@
 import pygame, time, sys, math
 from enum import IntEnum
 from vec2 import Vec2
-from utils import clamp_between
+from utils import clamp_between, check_collision
 from random import randint
 from handlers import MoveEventHandler, PlayerBulletSpawner, TrackEventHandler, CustomEvent
 from gameobject import GameObject
@@ -12,6 +12,7 @@ pygame.init()
 black = (0, 0, 0)
 red_circle = pygame.image.load("assets/player.png")
 ground_tileset = pygame.image.load("assets/grass-tiles.png")
+statue = pygame.image.load("assets/statue.png")
 
 class Game():
 
@@ -73,24 +74,30 @@ class Game():
         
 
     def setup(self):
+        statue_sprite = statue.convert_alpha()
 
         self.fps_counter = FpsCounter()
-        self.camera = GameObject(self, bounds=Vec2(960,640))
-        self.player = GameObject(self, position=Vec2(320,240), bounds=Vec2(35,47), sprite=red_circle.convert_alpha())
-        self.physics_objects = [self.player, self.camera]
+        self.camera = GameObject(self, "camera", bounds=Vec2(960,640))
+        self.player = GameObject(self, "player", position=Vec2(320,240), bounds=Vec2(35,47), sprite=red_circle.convert_alpha())
+
+        self.statue = GameObject(self, "statue", position=Vec2(600,240), bounds=Vec2(37,72), sprite=statue_sprite)
+
+        self.physics_objects = [self.player, self.camera, self.statue]
         
         self.objects[self.camera.id] = self.camera
         self.objects[self.player.id] = self.player
+        self.objects[self.statue.id] = self.statue
 
         self.layers = [Layer(0, parallax=Vec2(1,1)), Layer(1, parallax=Vec2(1, 1))]
         for x in range(30):
             for y in range(21):
                 tile_sprite = self.tiles[randint(0, 7)][randint(0, 3)]
-                cur_tile = GameObject(self, position=Vec2(x * 64, y * 64), bounds=Vec2(64, 64), sprite=tile_sprite)
+                cur_tile = GameObject(self, "tile", position=Vec2(x * 64, y * 64), bounds=Vec2(64, 64), sprite=tile_sprite)
                 self.objects[cur_tile.id] = cur_tile
                 self.layers[0].add_object(cur_tile)
 
         self.layers[1].add_object(self.player)
+        self.layers[1].add_object(self.statue)
 
         bullet_spawner = PlayerBulletSpawner(self, self.player)
 
@@ -110,7 +117,13 @@ class Game():
 
 
     def update(self, timestamp):
-        for obj in self.physics_objects:
+        
+        new_physics_objs = []
+        for i, obj in enumerate(self.physics_objects):
+            if obj.id not in self.objects:
+                continue
+
+            new_physics_objs.append(obj)
             new_position = obj.position + obj.speed
             out_of_bounds = False
             if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
@@ -120,8 +133,22 @@ class Game():
             if out_of_bounds:
                 for listener in self.update_listeners:
                     listener.on_event(pygame.event.Event(CustomEvent.OUT_OF_BOUNDS, {"object": obj.id}))
+
+            for obj2 in self.physics_objects[i + 1:]:
+                if obj2.id not in self.objects:
+                    continue
+
+                if check_collision(obj.position, obj2.position, obj.bounds, obj2.bounds):
+                    for listener in self.update_listeners:
+                        if listener.object.id not in self.objects or obj.id not in self.objects or obj2.id not in self.objects:
+                            continue
+
+                        listener.on_event(pygame.event.Event(CustomEvent.COLLISION, {"object": obj.id, "object2": obj2.id}))
+            
             obj.position = new_position
             obj.last_updated = timestamp
+
+        self.physics_objects = new_physics_objs
 
         new_listeners = []
         for listener in self.update_listeners:
@@ -138,6 +165,7 @@ class Game():
         self.screen.fill(black)
 
         width = self.width
+        final_correction = 0
 
         for layer in self.layers:
             new_objects = []
@@ -148,7 +176,7 @@ class Game():
                 
                 new_objects.append(obj_id)
                 obj = self.objects[obj_id]
-                obj_screen_position = ((obj.position[0] + (obj.speed[0] * correction) - self.camera.position[0]) * layer.parallax.x, (obj.position[1] + (obj.speed[1] * correction) - self.camera.position[1]) * layer.parallax.y)
+                obj_screen_position = ((obj.position[0] + (obj.speed[0] * final_correction) - self.camera.position[0]) * layer.parallax.x, (obj.position[1] + (obj.speed[1] * final_correction) - self.camera.position[1]) * layer.parallax.y)
 
                 if obj_screen_position[0] + obj.bounds[0] < 0 or obj_screen_position[0] > self.width or obj_screen_position[1] + obj.bounds[1] < 0 or obj_screen_position[1] > self.height:
                     # object is off screen, don't bother rendering    
