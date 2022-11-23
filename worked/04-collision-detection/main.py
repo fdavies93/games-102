@@ -100,10 +100,11 @@ class Game():
         self.layers[1].add_object(self.statue)
 
         bullet_spawner = PlayerBulletSpawner(self, self.player)
+        move_handler = MoveEventHandler(self, self.player, speed=6)
 
-        self.key_listeners = [MoveEventHandler(self, self.player, speed=6)]
+        self.key_listeners = [move_handler]
         self.mouse_listeners = [bullet_spawner]
-        self.update_listeners = [TrackEventHandler(self, self.camera, self.player), bullet_spawner]
+        self.update_listeners = [TrackEventHandler(self, self.camera, self.player), bullet_spawner, move_handler]
 
     def process_input(self):
         for event in pygame.event.get():
@@ -138,14 +139,14 @@ class Game():
                 if obj2.id not in self.objects:
                     continue
 
-                if check_collision(obj.position, obj2.position, obj.bounds, obj2.bounds):
+                if check_collision(obj.position + obj.speed, obj2.position + obj2.speed, obj.bounds, obj2.bounds):
                     for listener in self.update_listeners:
                         if listener.object.id not in self.objects or obj.id not in self.objects or obj2.id not in self.objects:
                             continue
 
                         listener.on_event(pygame.event.Event(CustomEvent.COLLISION, {"object": obj.id, "object2": obj2.id}))
             
-            obj.position = new_position
+            obj.position = obj.position + obj.speed # needs to account for any updates resulting from collisions
             obj.last_updated = timestamp
 
         self.physics_objects = new_physics_objs

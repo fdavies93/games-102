@@ -87,7 +87,7 @@ class PlayerBulletCollider(EventHandler):
         if type_1 in ignore_list or type_2 in ignore_list:
             return
 
-        print(f"Collision between {type_1} and {type_2}")
+        # print(f"Collision between {type_1} and {type_2}")
 
         if ev.object == self.object.id or ev.object2 == self.object.id:
             self.remove_self()
@@ -112,6 +112,7 @@ class PlayerBulletCollider(EventHandler):
 
 class MoveEventHandler(EventHandler):
     def __init__(self, game: "Game", obj : GameObject, speed = 5):
+        self.game = game
         self.speed_map = {
             'w': Vec2(0, -speed), 
             'a': Vec2(-speed, 0),
@@ -136,15 +137,23 @@ class MoveEventHandler(EventHandler):
         elif (ev.type == pygame.KEYUP):
             self.change_obj_speed( self.speed_map[key_name], True)
 
+    def handle_out_of_bounds(self, ev : pygame.event.Event):
+        self.object.position -= self.object.speed
+
     def handle_collision(self, ev : pygame.event.Event):
+
+        ignore_list = ["camera", "player_bullet"]
 
         if ev.object != self.object.id and ev.object2 != self.object.id:
             return
 
-        type_1 = self.game.objects[ev.object].type
-        type_2 = self.game.objects[ev.object2].type
+        obj_1 = self.game.objects[ev.object]
+        obj_2 = self.game.objects[ev.object2]
 
-        self.object.speed = self.object.speed.negate()
+        if obj_1.type in ignore_list or obj_2.type in ignore_list:
+            return
+
+        self.object.position -= self.object.speed
 
     def on_event(self, ev : pygame.event.Event):
 
@@ -152,9 +161,13 @@ class MoveEventHandler(EventHandler):
             self.handle_key_event(ev)
             return
 
+        if (ev.type == CustomEvent.OUT_OF_BOUNDS):
+            self.handle_out_of_bounds(ev)
+            return
+
         if (ev.type == CustomEvent.COLLISION):
             self.handle_collision(ev)
-            return     
+            return
 
         # print(f"Position: {self.object.position}, Speed: {self.object.speed}")
 
