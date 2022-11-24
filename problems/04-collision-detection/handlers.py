@@ -49,15 +49,18 @@ class PlayerBulletSpawner(EventHandler):
         obj = self.object
         
         mouse_pos = pygame.mouse.get_pos()
+        spawn_location = self.object.position
 
-        spawn_location = obj.position + Vec2(obj.bounds[0] / 2, obj.bounds[1] / 2)
-        screen_position = spawn_location - self.game.camera.position
-        
-        diff = Vec2(mouse_pos[0] - screen_position[0], mouse_pos[1] - screen_position[1])
-        hypothenuse = math.sqrt( (diff[0] ** 2) + (diff[1] ** 2) )
-        unit_speed = Vec2(diff[0] / hypothenuse, diff[1] / hypothenuse)
+        # trigonometry problem: how to fire a bullet in the direction of the cursor
+        # try to avoid using trig functions (sin, tan, cos etc) as these introduce inaccuracies
+        # information needed to fire a bullet at the mouse on a click
+        # - position of the mouse (see above)
+        # - position of the player (obj.position)
+        # - position of the camera (self.game.camera.position) - to adjust based on the position of stuff on screen
 
-        sprite = GameObject(self.game, "player_bullet", spawn_location, Vec2(16,16), speed=(unit_speed * self.speed), sprite=self.bullet_sprite)
+        final_speed = Vec2(self.speed,self.speed)
+
+        sprite = GameObject(self.game, "player_bullet", spawn_location, Vec2(16,16), speed=final_speed, sprite=self.bullet_sprite)
 
         self.game.objects[sprite.id] = sprite
         self.game.layers[1].add_object(sprite)

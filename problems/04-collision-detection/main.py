@@ -137,18 +137,21 @@ class Game():
             new_physics_objs.append(obj)
             new_position = obj.position + obj.speed
             out_of_bounds = False
-            if (new_position[0] < self.bounds[0] or new_position[0] + obj.bounds[0] > self.bounds[1]):
-                out_of_bounds = True
-            if (new_position[1] < self.bounds[0] or new_position[1] + obj.bounds[1] > self.bounds[1]):
-                out_of_bounds = True
+            # collision detection, problem 1
+            # how do we determine if an object is out of bounds? use the position and bounds parameter of the object
+            # and use the bounds parameter of the game object
             if out_of_bounds:
                 for listener in self.update_listeners:
                     listener.on_event(pygame.event.Event(CustomEvent.OUT_OF_BOUNDS, {"object": obj.id}))
 
+            # extension:
+            # check every other physics object against the current one being updated
+            # is this a good algorithm? how well will it scale to 100 physics objects? 10,000?
             for obj2 in self.physics_objects[i + 1:]:
                 if obj2.id not in self.objects:
                     continue
 
+                # note we're checking for collisions 1 frame in the future - this is so that we're not checking them after they happen
                 if check_collision(obj.position + obj.speed, obj2.position + obj2.speed, obj.bounds, obj2.bounds):
                     for listener in self.update_listeners:
                         if listener.object.id not in self.objects or obj.id not in self.objects or obj2.id not in self.objects:
