@@ -62,7 +62,7 @@ def ball_collision_handler(obj_1, obj_2, data):
     obj_2.speed[0] = -obj_2.speed[0]
     obj_2.speed[1] = -obj_2.speed[1]
 
-def check_out_of_bounds(obj : GameObject, callback):
+def check_out_of_bounds(obj : GameObject, callback = None):
     oob_data = {"x": False, "y": False}
     new_rect = obj.rect
     if new_rect.left < 0 or new_rect.right > width:
@@ -72,21 +72,29 @@ def check_out_of_bounds(obj : GameObject, callback):
         oob_data["y"] = True
 
     if oob_data["x"] or oob_data["y"]:
-        callback(obj, oob_data)
+        if callback != None:
+            callback(obj, oob_data)
+        return True
+    return False
 
 def update():
+
     for i, obj in enumerate(game_objects):
         # bounds check
 
-        if obj.type == OBJECT_TYPE.BALL:
-            handler = ball_collision_handler
+        handler = ball_collision_handler
+
+        # if obj.type == OBJECT_TYPE.BALL:
+        #     handler = ball_collision_handler
         
         # # shaky collisions bug; probably need to get everything's next position before doing checks on moving objs
         for obj_2 in game_objects[i+1:]:
             check_collision(obj, obj_2, handler)
 
-        if obj.type == OBJECT_TYPE.BALL:
-            handler = ball_oob_handler
+        handler = ball_oob_handler
+
+        # if obj.type == OBJECT_TYPE.BALL:
+        #     handler = ball_oob_handler
 
         check_out_of_bounds(obj, handler)
 
@@ -129,6 +137,21 @@ def render(frame_lag = 0):
     frames += 1
 
 def setup():
+
+    for i in range(26):
+        new_rect = Rect(random.randint(50, width - 50), random.randint(50, width - 50), 0, 0)
+        new_obj = GameObject(OBJECT_TYPE.BLOCK, new_rect, [0,0])
+        collisions = True
+        while collisions:
+            collisions = False
+            for obj in game_objects:
+                if check_collision(new_obj, obj):
+                    collisions = True
+                    new_obj.rect.x = random.randint(50, width - 50)
+                    new_obj.rect.y = random.randint(50, width - 50)
+                    break
+        game_objects.append(new_obj)
+
     for i in range(101):   
         new_rect = Rect(random.randint(50, width - 50), random.randint(50, width - 50), 0, 0)
         new_obj = GameObject(OBJECT_TYPE.BALL, new_rect)
