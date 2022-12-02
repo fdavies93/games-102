@@ -10,8 +10,8 @@ screen = pygame.display.set_mode(size)
 ball_sprite = pygame.image.load("assets/red-circle-small.png").convert_alpha()
 block_sprite = pygame.image.load("assets/block.png").convert_alpha()
 
-blocks_to_spawn = 0
-balls_to_spawn = 1000
+blocks_to_spawn = 20
+balls_to_spawn = 10
 render_objs = True
 
 game_objects = []
@@ -70,6 +70,7 @@ class StaticPartition():
             grid_x += 1
     
     def get_grid_coords(self,obj : GameObject):
+        # using obj.rect.left and obj.rect.top, translate the position of the object we're adding to the cell location
         return ( math.floor(obj.rect.left / float(self.cell_size)) , math.floor(obj.rect.top / float(self.cell_size)) )
 
     def add_object(self, obj: GameObject, index : int):
@@ -79,14 +80,6 @@ class StaticPartition():
         obj.prev_x = x_cell
         obj.prev_y = y_cell
         self.cells[x_cell][y_cell].add(index)
-
-    def get_neighbors(self, obj: GameObject, index : int):
-        x_cell, y_cell = self.get_grid_coords(obj)
-
-        if index not in self.cells[x_cell][y_cell]:
-            return []
-
-        return list(self.cells[x_cell][y_cell].difference( {index} ))
 
     def update_object(self, obj: GameObject, index : int):
         x_cell, y_cell = self.get_grid_coords(obj)
@@ -168,10 +161,11 @@ def old_skool_update():
     for i, obj in enumerate(balls):
         handler = ball_collision_handler
 
+        # check collisions between 2 balls
         for obj_2 in balls[i+1:]:
             check_collision(obj, obj_2, handler)
         
-        # good optimisation if we only have 1 ball and a ton of blocks
+        # check collisions between balls and blocks
         for block in blocks:
             check_collision(obj, block, handler)
 
@@ -182,6 +176,7 @@ def old_skool_update():
         this_update = (obj.speed[0], obj.speed[1])
         obj.rect = obj.rect.move(this_update)
 
+# function to wrap the cell update in a way that makes more sense
 def update_cell(cell : set, cell_x, cell_y):
     cell_list = list(cell)
     for i, obj_i in enumerate(cell_list):
@@ -199,6 +194,13 @@ def update_cell(cell : set, cell_x, cell_y):
         static_partition.update_object(obj, obj_i)
 
 def linear_partition_update():
+    # iterate through all cells in the static partition
+    # for each cell in the partition:
+    # - for each object in the cell:
+    # -- check collisions
+    # -- check out of bounds
+    # -- do the physics update
+    # -- update the static partition
     for x, col in enumerate(static_partition.cells):
         for y, cell in enumerate(col):
             update_cell(cell, x, y)
