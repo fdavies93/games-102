@@ -10,8 +10,8 @@ screen = pygame.display.set_mode(size)
 ball_sprite = pygame.image.load("assets/red-circle-small.png").convert_alpha()
 block_sprite = pygame.image.load("assets/block.png").convert_alpha()
 
-blocks_to_spawn = 25
-balls_to_spawn = 1
+blocks_to_spawn = 0
+balls_to_spawn = 1000
 render_objs = True
 
 game_objects = []
@@ -24,10 +24,18 @@ frames = 0
 prev_render = 0
 prev_frames = 0
 
-static_partition_scale = 500 # 160 is a reasonable size and goes into 1280 and 960 ok
+static_partition_scale = 160 # 160 is a reasonable size and goes into 1280 and 960 ok
 dynamic_partition_objects = 2 # 2 objects is optimal for collision
 
 font = pygame.font.Font(None, 24)
+
+def clamp_between(val, low, high):
+        out = val
+        if val > high:
+            out = high
+        if val < low:
+            out = low
+        return out
 
 class OBJECT_TYPE(IntEnum):
     BALL = 0, 
@@ -40,71 +48,60 @@ class GameObject():
         elif obj_type == OBJECT_TYPE.BLOCK:
             sprite = block_sprite
 
-        self.rect = Rect(position.top, position.left, sprite.get_width(), sprite.get_height())
+        self.rect = Rect(position.left, position.top, sprite.get_width(), sprite.get_height())
         self.sprite = sprite
         self.type = obj_type
         self.speed = [speed[0], speed[1]]
+        self.prev_x = 0
+        self.prev_y = 0
 
 class StaticPartition():
     def __init__(self, cell_size : int):
         self.cell_size = cell_size
-        self.cells = {}
+        self.cells = []
+        grid_x = 0
+        grid_y = 0
+        while grid_x * cell_size < width:
+            grid_y = 0
+            self.cells.append([])
+            while grid_y * cell_size < height:
+                self.cells[grid_x].append(set())
+                grid_y += 1
+            grid_x += 1
     
     def get_grid_coords(self,obj : GameObject):
-        return ( math.floor(obj.rect.x / self.cell_size) , math.floor(obj.rect.y / self.cell_size) )
+        return ( math.floor(obj.rect.left / float(self.cell_size)) , math.floor(obj.rect.top / float(self.cell_size)) )
 
     def add_object(self, obj: GameObject, index : int):
         x_cell, y_cell = self.get_grid_coords(obj)
-        
-        if x_cell not in self.cells:
-            self.cells[x_cell] = {}
-        
-        if y_cell not in self.cells[x_cell]:
-            self.cells[x_cell][y_cell] = set() # list of objects in the appropriate cell
-
+        x_cell = clamp_between(x_cell, 0, len(self.cells) - 1)
+        y_cell = clamp_between(y_cell, 0, len(self.cells[0]) - 1)
+        obj.prev_x = x_cell
+        obj.prev_y = y_cell
         self.cells[x_cell][y_cell].add(index)
 
     def get_neighbors(self, obj: GameObject, index : int):
         x_cell, y_cell = self.get_grid_coords(obj)
 
-        if x_cell not in self.cells or y_cell not in self.cells[x_cell] or index not in self.cells[x_cell][y_cell]:
+        if index not in self.cells[x_cell][y_cell]:
             return []
 
         return list(self.cells[x_cell][y_cell].difference( {index} ))
 
     def update_object(self, obj: GameObject, index : int):
         x_cell, y_cell = self.get_grid_coords(obj)
-        prev_x_cell = math.floor((obj.rect.x - obj.speed[0]) / self.cell_size)
-        prev_y_cell = math.floor((obj.rect.y - obj.speed[1]) / self.cell_size)
+        prev_x_cell = obj.prev_x
+        prev_y_cell = obj.prev_y
         
         # no change
         if x_cell == prev_x_cell and y_cell == prev_y_cell:
             return
-
         # remove from old location
-        self.cells[prev_x_cell][prev_y_cell].remove(index)
+
+        self.cells[prev_x_cell][prev_y_cell].discard(index)
 
         # add to new location
         self.add_object(obj, index)
-
-    def prune_cells(self):
-        prune_x_cells = []
-        prune_x_y = []
-        for cell_x in self.cells:
-            prune_x = True
-            for cell_y in self.cells[cell_x]:
-                if len(self.cells[cell_x][cell_y]) == 0:
-                    prune_x_y.append( (cell_x, cell_y) )
-                else:
-                    prune_x = False
-            if prune_x:
-                prune_x_cells.append(cell_x)
-        
-        for cell in prune_x_y:
-            del self.cells[cell[0], cell[1]]
-        
-        for x_cell in prune_x_cells:
-            del self.cells[x_cell]
 
 
 static_partition = StaticPartition(static_partition_scale)
@@ -119,9 +116,6 @@ def next_rect(timestep, obj):
 
 def check_collision(obj_1, obj_2, callback = None):
     if obj_1.rect.colliderect(obj_2.rect):
-        
-        if obj_1.type == OBJECT_TYPE.BLOCK or obj_2.type == OBJECT_TYPE.BLOCK:
-            print ("Collision!")
         if callback != None:
             callback(obj_1, obj_2, {})
         return True
@@ -132,7 +126,7 @@ def ball_oob_handler(obj, data):
     if data["y"]:
         obj.speed[1] = -obj.speed[1]
 
-def ball_collision_handler(obj_1, obj_2, data):    
+def ball_collision_handler(obj_1, obj_2, data):
     obj_1.speed[0] = -obj_1.speed[0]
     obj_1.speed[1] = -obj_1.speed[1]
     obj_2.speed[0] = -obj_2.speed[0]
@@ -188,40 +182,26 @@ def old_skool_update():
         this_update = (obj.speed[0], obj.speed[1])
         obj.rect = obj.rect.move(this_update)
 
-def update_cell(cell : set):
+def update_cell(cell : set, cell_x, cell_y):
     cell_list = list(cell)
-    handler = ball_collision_handler
-    for i in cell_list:
-        obj = game_objects[i]
-        for i2 in cell_list[i+1:]:
-            obj_2 = game_objects[i2]
+    for i, obj_i in enumerate(cell_list):
+        handler = ball_collision_handler
+        obj = game_objects[obj_i]
+        for obj_i2 in cell_list[i+1:]:
+            obj_2 = game_objects[obj_i2]
             check_collision(obj, obj_2, handler)
+
         handler = ball_oob_handler
         check_out_of_bounds(obj, handler)
+        
         this_update = (obj.speed[0], obj.speed[1])
         obj.rect = obj.rect.move(this_update)
-        static_partition.update_object(obj, i)
+        static_partition.update_object(obj, obj_i)
 
 def linear_partition_update():
-
-    for x_cell in static_partition.cells:
-        for y_cell in static_partition.cells[x_cell]:
-            cur_cell = static_partition.cells[x_cell][y_cell]
-            update_cell(cur_cell)
-
-    static_partition.prune_cells()
-    # for i, obj in enumerate(game_objects):
-    #     handler = ball_collision_handler
-    #     neighbors = static_partition.get_neighbors(obj, i)
-    #     for i2 in neighbors:
-    #         # print (i2)
-    #         obj_2 = game_objects[i2]
-    #         check_collision(obj, obj_2, handler)
-    #     handler = ball_oob_handler
-    #     check_out_of_bounds(obj, handler)
-    #     this_update = (obj.speed[0], obj.speed[1])
-    #     obj.rect = obj.rect.move(this_update)
-    #     static_partition.update_object(obj, i)
+    for x, col in enumerate(static_partition.cells):
+        for y, cell in enumerate(col):
+            update_cell(cell, x, y)
 
 def update():
     # swap this out for different methods
@@ -243,7 +223,7 @@ def update():
 def setup():
 
     for i in range(blocks_to_spawn):
-        new_rect = Rect(random.randint(50, width - 50), random.randint(50, width - 50), 0, 0)
+        new_rect = Rect(random.randint(50, width - 50), random.randint(50, height - 50), 0, 0)
         new_obj = GameObject(OBJECT_TYPE.BLOCK, new_rect, [0,0])
         collisions = True
         while collisions:
@@ -251,16 +231,15 @@ def setup():
             for obj in game_objects:
                 if check_collision(new_obj, obj):
                     collisions = True
-                    new_obj.rect.x = random.randint(50, width - 50)
-                    new_obj.rect.y = random.randint(50, width - 50)
+                    new_obj.rect.left = random.randint(50, width - 50)
+                    new_obj.rect.top = random.randint(50, height - 50)
                     break
         game_objects.append(new_obj)
         blocks.append(new_obj)
         static_partition.add_object(new_obj, len(game_objects) - 1)
 
-
     for i in range(balls_to_spawn):   
-        new_rect = Rect(random.randint(50, width - 50), random.randint(50, width - 50), 0, 0)
+        new_rect = Rect(random.randint(50, width - 50), random.randint(50, height - 50), 0, 0)
         new_obj = GameObject(OBJECT_TYPE.BALL, new_rect)
         collisions = 1
         while collisions > 0:
@@ -268,8 +247,8 @@ def setup():
             for obj in game_objects:
                 if check_collision(new_obj, obj):
                     collisions += 1
-                    new_obj.rect.x = random.randint(50, width - 50)
-                    new_obj.rect.y = random.randint(50, width - 50)
+                    new_obj.rect.left = random.randint(50, width - 50)
+                    new_obj.rect.top = random.randint(50, height - 50)
                     break
                 
         
