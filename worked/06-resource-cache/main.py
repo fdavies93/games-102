@@ -1,4 +1,5 @@
 import pygame, time, sys
+from pathlib import Path
 pygame.init()
 
 size = width, height = (640, 480) # 20 x 15 at 32 x 32 tiles
@@ -6,6 +7,7 @@ black = (0, 0, 0)
 screen = pygame.display.set_mode(size)
 frame_time = 1.0 / 60.0
 do_render = True
+asset_path = Path("./assets/")
 
 class TileManager:
     def __init__(self, meta_index):
@@ -23,7 +25,8 @@ class TileManager:
         return index_out
 
     def load_tileset_data(self, name):
-        with open('./assets/' + self.tile_sets[name]["data_file"], 'r') as f:
+        data_file = asset_path / self.tile_sets[name]["data_file"]
+        with open(data_file, 'r') as f:
             for line in f:
                 split = line.split()
                 # not a tile, ignore it
@@ -39,7 +42,7 @@ class TileManager:
         # it's already loaded
         if "sprite" in self.tile_sets[ts]:
             return
-        image_path = "./assets/" + self.tile_sets[ts]["texture"]
+        image_path = asset_path / self.tile_sets[ts]["texture"]
         tileset_sprite = pygame.image.load(image_path).convert_alpha()
         tileset_sprite = pygame.transform.scale(tileset_sprite, (tileset_sprite.get_width() * zoom_level, tileset_sprite.get_height() * zoom_level))
         self.tile_sets[ts]["sprite"] = tileset_sprite
@@ -71,7 +74,7 @@ class Map:
         self.grid_scale = grid_scale
 
     def load_data(self, map_file):
-        with open('./assets/' + map_file, "r") as f:
+        with open(asset_path / map_file, "r") as f:
             for line in f:
                 split = line.split()
                 if len(split) != 5:
@@ -149,7 +152,7 @@ def render(manager, my_map):
     pygame.display.flip()    
 
 def main():
-    manager = TileManager("./assets/index")
+    manager = TileManager(asset_path / "index")
     manager.load_tileset_data("dungeon")
     manager.load_tileset_sprite("dungeon", 2)
 
