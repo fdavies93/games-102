@@ -6,7 +6,7 @@ size = width, height = (640, 480) # 20 x 15 at 32 x 32 tiles
 black = (0, 0, 0)
 screen = pygame.display.set_mode(size)
 frame_time = 1.0 / 60.0
-do_render = True
+do_render = False
 asset_path = Path("./assets/")
 
 class TileManager:
@@ -153,8 +153,8 @@ def render(manager, my_map):
 
 def main():
     manager = TileManager(asset_path / "index")
-    manager.load_tileset_data("dungeon")
-    manager.load_tileset_sprite("dungeon", 2)
+    # manager.load_tileset_data("dungeon")
+    # manager.load_tileset_sprite("dungeon", 2)
 
     my_map = Map("dungeon", (32, 32))
     my_map.load_data("map")
@@ -163,7 +163,10 @@ def main():
         start = time.time()
         process_input(manager)
         render(manager, my_map)
-        time.sleep(start + frame_time - time.time())
+        sleep_time = start + frame_time - time.time()
+        if sleep_time < 0:
+            sleep_time = 0
+        time.sleep(sleep_time)
 
 if __name__ == "__main__":
     main()
