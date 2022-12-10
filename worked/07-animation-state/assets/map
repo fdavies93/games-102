@@ -1,0 +1,9 @@
+wall_mid 0 0 20 1
+wall_mid 0 0 1 15
+wall_mid 19 0 1 15
+wall_mid 0 14 20 1
+floor_1 1 1 18 13
+skull 10 6 1 1
+elf_m 32 32
+orc_warrior 128 150
+orc_shaman 160 150
