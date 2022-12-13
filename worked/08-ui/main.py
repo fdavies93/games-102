@@ -66,7 +66,6 @@ class DamageUiHandler(EventHandler):
 
         scalar = cur_frames / time_as_frames
         
-        print(self.object.opacity)
         # move straight up - could be altered in real game to allow juicy damage animations
         self.object.rect = self.start_rect.move(0, -(self.travel_distance * scalar))
         
