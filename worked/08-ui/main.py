@@ -56,7 +56,9 @@ class DamageUiHandler(EventHandler):
         if not ev.type == CustomEvent.AFTER_UPDATE:
             return
 
+        # check the current frame of the animation
         cur_frames = (ev.frame - self.spawn_frame)
+        # convert the absolute time for the animation to frames using frame_time global
         time_as_frames = self.time / frame_time
 
         # if animation has finished, delete object (and self, indirectly)
@@ -64,9 +66,13 @@ class DamageUiHandler(EventHandler):
             cur_map.objects.remove(self.object)
             return
 
+        # calculate the scalar (value between 0-1) used to calculate opacity and position
         scalar = cur_frames / time_as_frames
 
+        # set opacity using scalar
         self.object.opacity = 255 - (255 * scalar)
+
+        # set position using scalar and the travel distance variable
         # move straight up - could be altered in real game to allow juicy damage animations
         self.object.rect = self.start_rect.move(0, -(self.travel_distance * scalar))
         
@@ -80,17 +86,16 @@ class OnClickHandler(EventHandler):
         if (not ev.type == CustomEvent.CLICKED_ON) or cur_map.paused:
             return
         
+        # create a new gameobject in the same position as object this handler is attached to
         new_obj = GameObject(self.object.rect.copy(), None)
+        # make a random value and set the text to it
         new_obj.text = str(random.randint(1000, 10000))
+        # add object to map
         cur_map.objects.append(new_obj)
-        print(ev.frame)
-        new_handler = DamageUiHandler(new_obj, ev.frame, time=0.5)
+        # create a new handler attached to the object with the appropriate spawn_time, time (to complete), and travel_distance variables
+        new_handler = DamageUiHandler(new_obj, ev.frame, time=0.5, travel_distance=25)
+        # add the handler to the map handlers
         cur_map.handlers.append(new_handler)
-
-        # self.object.opacity -= 15
-        # if self.object.opacity < 0: self.object.opacity += 255
-        # print(f"New opacity: {self.object.opacity}")
-        # spawn damage ui with appropriate values
 
 class GraphicsManager:
     def __init__(self, meta_index):
